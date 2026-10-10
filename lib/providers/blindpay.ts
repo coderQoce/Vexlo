@@ -1,0 +1,10 @@
+import type { ProviderAdapter, PayoutRequest, PayoutResult, QuoteRequest, QuoteResult } from './types';
+import { ProviderUnavailableError } from './types';
+export class BlindPayAdapter implements ProviderAdapter {
+ readonly name='blindpay';private base=process.env.BLINDPAY_BASE_URL||'https://api.blindpay.com';
+ private instance(){const value=process.env.BLINDPAY_INSTANCE_ID;if(!value)throw new ProviderUnavailableError('BlindPay instance ID is not configured.');return value}
+ private token(){const value=process.env.BLINDPAY_API_KEY;if(!value)throw new ProviderUnavailableError('BlindPay API key is not configured.');return value}
+ private async request(path:string,body:unknown){const response=await fetch(`${this.base}${path}`,{method:'POST',headers:{Authorization:`Bearer ${this.token()}`,'Content-Type':'application/json',accept:'application/json'},body:JSON.stringify(body),cache:'no-store'});const data=await response.json();if(!response.ok)throw new Error(`BlindPay request failed (${response.status}).`);return data as Record<string,unknown>}
+ async quote(i:QuoteRequest):Promise<QuoteResult>{const raw=await this.request(`/v1/instances/${encodeURIComponent(this.instance())}/quotes`,{source_currency:i.sourceCurrency,destination_currency:i.targetCurrency,source_amount:i.sourceAmount});const quote=raw.data as Record<string,unknown>|undefined;const rate=Number(quote?.rate??0);return {provider:this.name,quoteId:String(quote?.id??i.idempotencyKey),sourceAmount:Number(quote?.source_amount??i.sourceAmount),targetAmount:Number(quote?.destination_amount??0),rate,fee:Number(quote?.fee??0),expiresAt:String(quote?.expires_at??new Date(Date.now()+30_000).toISOString()),simulated:false,raw}}
+ async payout(i:PayoutRequest):Promise<PayoutResult>{throw new ProviderUnavailableError(`BlindPay payout requires its quote ID, recipient onboarding, managed wallet, and chain-specific payout contract. Use the dedicated BlindPay payout flow; this generic bank payout adapter intentionally refuses to guess the request schema for ${i.currency}.`)}
+}

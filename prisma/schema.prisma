@@ -1,0 +1,221 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String                  @id @default(cuid())
+  firstName         String
+  lastName          String
+  email             String?                 @unique
+  phone             String?                 @unique
+  handle            String                  @unique
+  passwordHash      String
+  transactionPinHash String?
+  kycTier           Int                     @default(0)
+  status            String                  @default("ACTIVE")
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  wallets           Wallet[]
+  sentTransactions  Transaction[]           @relation("Sender")
+  receivedTransactions Transaction[]         @relation("Recipient")
+  policies          Policy[]
+  cards             Card[]
+  contacts          Contact[]
+  miniAppOrders     MiniAppOrder[]
+  credentials       VerifiableCredential[]
+  kycRecords        KYCRecord[]
+  sessions          Session[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, expiresAt])
+}
+
+model Wallet {
+  id             String   @id @default(cuid())
+  userId         String
+  asset          String   @default("USDC")
+  network        String   @default("stellar")
+  providerRef    String?
+  availableMinor BigInt   @default(0)
+  pendingMinor   BigInt   @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([userId, asset, network])
+}
+
+model Transaction {
+  idempotencyKey String   @id
+  userId         String
+  recipientId    String?
+  type           String
+  status         String   @default("PENDING")
+  amountMinor    BigInt
+  asset          String   @default("USDC")
+  sourceCurrency String?
+  targetCurrency String?
+  feeMinor       BigInt   @default(0)
+  provider       String?
+  providerRef    String?
+  stellarHash    String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation("Sender", fields: [userId], references: [id])
+  recipient      User?    @relation("Recipient", fields: [recipientId], references: [id])
+  actions        AgentAction[]
+  @@index([userId, createdAt])
+  @@index([provider, providerRef])
+}
+
+model AgentAction {
+  id             String      @id @default(cuid())
+  transactionKey String?
+  agentIdentityId String?
+  action         String
+  result         String
+  timestampMs    BigInt
+  nonce          String      @unique
+  signature      String
+  algorithm      String
+  metadata       Json?
+  createdAt      DateTime    @default(now())
+  transaction    Transaction? @relation(fields: [transactionKey], references: [idempotencyKey])
+  agentIdentity  AgentIdentity? @relation(fields: [agentIdentityId], references: [id])
+  @@index([createdAt])
+}
+
+model AgentIdentity {
+  id             String      @id @default(cuid())
+  did            String      @unique
+  name           String
+  role           String
+  publicKey      String
+  credential     Json
+  status         String      @default("ACTIVE")
+  createdAt      DateTime    @default(now())
+  actions        AgentAction[]
+}
+
+model Policy {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  autoExecuteMinor BigInt   @default(25000)
+  dailySpendMinor  BigInt   @default(500000)
+  humanOverride    Boolean  @default(false)
+  agentToggles     Json
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Card {
+  id             String   @id @default(cuid())
+  userId         String
+  providerRef    String?
+  lastFour       String
+  status         String   @default("ACTIVE")
+  monthlyLimitMinor BigInt @default(500000)
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, status])
+}
+
+model Contact {
+  id          String   @id @default(cuid())
+  userId      String
+  contactUserId String?
+  name        String
+  handle      String?
+  phone       String?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, name])
+}
+
+model MiniAppOrder {
+  id             String   @id @default(cuid())
+  userId         String
+  appId          String
+  status         String   @default("PENDING")
+  amountMinor    BigInt
+  asset          String   @default("USDC")
+  recipient      String
+  providerRef    String?
+  transactionKey String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, createdAt])
+}
+
+model VerifiableCredential {
+  id         String   @id @default(cuid())
+  userId     String
+  issuerDid  String
+  subjectDid String
+  type       String
+  credential Json
+  expiresAt  DateTime?
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model KYCRecord {
+  id          String   @id @default(cuid())
+  userId      String
+  provider    String
+  providerRef String?
+  tier        Int      @default(0)
+  status      String   @default("PENDING")
+  result      Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, status])
+}
+
+model IdempotencyRecord {
+  key        String   @id
+  route      String
+  bodyHash   String
+  response   Json?
+  statusCode Int?
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  requestId String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  @@index([userId, createdAt])
+}
+
+model OtpChallenge {
+  id         String   @id @default(cuid())
+  subject    String
+  codeHash   String
+  purpose    String
+  attempts   Int      @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime @default(now())
+  @@index([subject, purpose, expiresAt])
+}

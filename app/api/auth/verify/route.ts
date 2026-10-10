@@ -1,0 +1,11 @@
+import { NextResponse } from 'next/server';
+import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
+import { prisma } from '@/lib/db';
+import { clientKey, rateLimit } from '@/lib/rate-limit';
+import { hashToken, otpHash, safeEqual, signSession } from '@/lib/security';
+import { SESSION_COOKIE, sameOrigin } from '@/lib/api-auth';
+
+export const runtime='nodejs';
+const schema=z.object({challengeId:z.string().min(5).max(100),code:z.string().regex(/^\d{6}$/)});
+export async function POST(request:Request){if(!sameOrigin(request))return NextResponse.json({error:'Cross-origin request rejected.'},{status:403});const rate=rateLimit(`otp:${clientKey(request)}`,10);if(!rate.ok)return NextResponse.json({error:'Too many verification attempts.'},{status:429});try{const {challengeId,code}=schema.parse(await request.json());const challenge=await prisma.otpChallenge.findUnique({where:{id:challengeId}});if(!challenge||challenge.consumedAt||challenge.expiresAt<new Date()||challenge.attempts>=5)return NextResponse.json({error:'This verification code expired or is no longer available.'},{status:400});const valid=safeEqual(challenge.codeHash,otpHash(challenge.id,code));await prisma.otpChallenge.update({where:{id:challenge.id},data:{attempts:{increment:1},...(valid?{consumedAt:new Date()}:{})}});if(!valid)return NextResponse.json({error:'That verification code is not correct.'},{status:400});const user=await prisma.user.update({where:{id:challenge.subject},data:{status:'ACTIVE'}});const expiresAt=new Date(Date.now()+7*24*60*60_000);const sessionId=randomUUID();const token=await signSession(user.id,sessionId);await prisma.session.create({data:{id:sessionId,userId:user.id,tokenHash:hashToken(token),expiresAt}});const response=NextResponse.json({user:{id:user.id,firstName:user.firstName,lastName:user.lastName,handle:user.handle},expiresAt},{headers:{'Cache-Control':'no-store'}});response.cookies.set(SESSION_COOKIE,token,{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'strict',path:'/',expires:expiresAt});return response}catch(error){if(error instanceof z.ZodError)return NextResponse.json({error:'Enter the six-digit verification code.'},{status:400});return NextResponse.json({error:'Unable to verify this code.'},{status:500})}}
