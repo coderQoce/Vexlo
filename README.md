@@ -1,89 +1,117 @@
-# Vexlo Web
+# Vexlo Web App — A Friendly Guide
 
-Vexlo is a responsive stablecoin payments prototype for African and emerging-market corridors. It includes a wallet experience, a six-step agent workflow, policy controls, protocol receipts, and embedded mini-app flows. The app clearly marks simulated behavior; the repository is not a production payment service.
+Vexlo is a website demo for a digital wallet. You can explore a dashboard, try sample money actions, review activity, and look at tools such as the card, currency swap, and Vexlo Agent screens.
 
-The interface is built with React, Bootstrap 5.3.8 layout utilities, and the project's custom CSS design system. Next.js remains the React app framework so the server API, authentication, and backend routes stay part of the same project. Tailwind has been removed.
+**This is a demo, not a real bank or payment service.** The app labels sample activity as demo activity. Mock mode does not move real money, make real card payments, or provide real exchange rates. Some backend building blocks exist, but real payment providers and production security services are not fully connected.
 
-## Requirements
+## What was used to build it
 
-- Node.js 22 or newer
-- Bootstrap 5.3.8 (installed from the project dependencies)
-- PostgreSQL 14 or newer
-- npm or pnpm
+You do not need to know these names to use the app. They describe the pieces used to make it:
 
-## Local setup
+- **Next.js** runs the website and its behind-the-scenes web addresses (called API routes).
+- **React** builds the parts of the website that respond when you click buttons.
+- **TypeScript** helps catch mistakes in the code while it is being written.
+- **Bootstrap** provides some ready-made layout helpers. The Vexlo look and feel is mostly defined in its own CSS file.
+- **PostgreSQL** stores account and transaction records when the database is configured.
+- **Prisma** connects the app to PostgreSQL and describes the information the app stores.
 
-1. Copy `.env.example` to `.env` and set `DATABASE_URL` and a random `SESSION_SECRET` of at least 32 characters. Keep secrets server-side and out of source control.
-2. Install dependencies with `npm install` (or `pnpm install`).
-3. Create the database schema and demo agent identities:
+## Find a screen or change how it looks
 
-   ```sh
-   npx prisma migrate dev --name init
-   npm run db:seed
-   ```
+Most screens currently live together in one file. They are not separate web pages with separate addresses: the app changes the visible screen when you select something in its menu. In the code, each screen has a name such as `dashboard`, `send`, or `card`.
 
-4. Start the app with `npm run dev` and open [http://localhost:3000](http://localhost:3000).
-
-The default provider mode is `mock`. In development, `AUTH_OTP_MODE=mock` returns a demo OTP in the API response. Do not use demo credentials or mock OTP behavior for real accounts. Production sign-up and sign-in fail closed until an OTP delivery adapter is configured.
-
-## Environment variables
-
-| Variable | Purpose |
+| What you see in Vexlo | Where to look in the project |
 | --- | --- |
-| `DATABASE_URL` | PostgreSQL connection string |
-| `SESSION_SECRET` | HS256 session signing secret (32+ characters) |
-| `AUTH_OTP_MODE` | `mock` for development; a delivery adapter is required for production |
-| `VEXLO_PROVIDER_MODE` | `mock` by default; `live` selects configured provider adapters |
-| `VEXLO_LIVE_PAYMENTS_ENABLED` | Explicit live-payment kill switch; defaults to `false` |
-| `VEXLO_LIVE_AGENT_PIPELINE_ENABLED` | Additional gate for provider payout execution; defaults to `false` |
-| `FLUTTERWAVE_SECRET_KEY` | Server-side Flutterwave API credential |
-| `BLINDPAY_API_KEY`, `BLINDPAY_INSTANCE_ID` | BlindPay API configuration |
-| `WISE_API_TOKEN`, `WISE_PROFILE_ID` | Wise API configuration |
-| `LIGHTSPARK_API_TOKEN` | Lightspark credential; adapter remains unavailable until its SDK port is implemented |
-| `STELLAR_HORIZON_URL`, `STELLAR_NETWORK_PASSPHRASE`, `STELLAR_USDC_ISSUER` | Stellar network and asset configuration |
-| `KMS_KEY_REFERENCE` | Reference for a future KMS-backed Stellar signing integration; no secret key is read from environment |
-| `SMTP_URL`, `SMS_PROVIDER_URL` | Reserved for outbound notification adapters; not wired yet |
+| Welcome animation, sign-in, create account, and account setup | `app/page.tsx` |
+| Main dashboard and quick actions | `app/page.tsx` |
+| Send, receive, deposit, withdraw, and swap screens | `app/page.tsx` |
+| Transaction history and export | `app/page.tsx` |
+| Earn yield and Vexlo card screens | `app/page.tsx` |
+| Account settings | `app/page.tsx` |
+| Control Center and Protocol Dashboard | `components/phase4.tsx` |
+| Vexlo Agent chat | `components/agent-chat.tsx` |
+| Vexlo Apps and Developer SDK screens | `components/mini-apps.tsx` |
+| The site's colors, spacing, fonts, and responsive layout | `app/globals.css` |
+| Page title, Bootstrap setup, and shared page wrapper | `app/layout.tsx` |
+| The logo and other pictures | `public/images/` |
 
-Never prefix provider credentials or session secrets with `NEXT_PUBLIC_`. Never put a Stellar secret key in the app, environment, or browser.
+**A simple way to find a screen in the code:** open `app/page.tsx` in a code editor and search for its name, for example `screen==='send'` or `screen==='dashboard'`. The visible words and click behavior for that screen are nearby. To change the overall colors, sizes, or spacing, look for the matching style in `app/globals.css`.
 
-## Commands
+## Where the behind-the-scenes work lives
 
-```sh
-npm run dev         # local development
-npm run lint        # static lint checks
-npm test            # unit tests
-npm run build       # generate Prisma client and build Next.js
-npm run db:migrate  # create/update local database schema
-npm run db:seed     # seed simulated agent identities
+The `app/api/` folder contains server routes. A route is a private web address the website can contact to do a task, such as sign in or request a payment. The folder names give a good clue about each task:
+
+| Folder | What it handles |
+| --- | --- |
+| `app/api/auth/` | Sign in, sign out, registration, verification, and account details |
+| `app/api/wallet/` | Wallet information |
+| `app/api/send/`, `deposit/`, `withdraw/`, `swap/` | Money-action requests |
+| `app/api/payments/` and `app/api/receipts/` | Payment records and receipts |
+| `app/api/card/` | Card settings |
+| `app/api/providers/` | Requests to payment and money-transfer services |
+| `app/api/agent/` | Vexlo Agent chat requests |
+| `app/api/policies/` and `control-center/` | Safety rules and activity logs |
+| `app/api/apps/` | Demo app orders |
+
+Shared server helpers are in `lib/`. For example, `lib/security.ts` handles security helpers, `lib/policy.ts` checks payment rules, `lib/financial-action.ts` supports payment actions, and `lib/providers/` contains connections (or demo substitutes) for external payment services.
+
+The `prisma/` folder contains the database description (`schema.prisma`) and optional sample-data setup (`seed.ts`). The `tests/` folder contains automated checks for some backend rules.
+
+## Run Vexlo on your computer
+
+You will need **Node.js 22 or newer** and **npm**. If you want the database-backed features, you will also need a running **PostgreSQL 14 or newer** database. If Node.js is already installed, you can check by opening PowerShell in this folder and entering:
+
+```powershell
+node --version
+npm --version
 ```
 
-Regenerate and commit a package lockfile using the package manager chosen for deployment. Deployments should use a managed PostgreSQL database, a Node 22 runtime, HTTPS, managed secrets, database backups, and a KMS/vault integration before enabling any real money movement.
+Then, from the project folder, install the app's packages and make a local settings file:
 
-## Architecture
+```powershell
+npm install
+Copy-Item .env.example .env
+```
 
-- `app/` contains the Next.js App Router UI and REST endpoints.
-- `components/` contains the responsive wallet, Control Center, agent chat, and mini-app UI.
-- `lib/` contains authentication/security helpers, policy and idempotency logic, and provider adapters.
-- `prisma/schema.prisma` defines the persistent domain model; `prisma/seed.ts` inserts simulated agent identities.
-- `tests/` contains policy and adapter unit tests.
+Open `.env` in a text editor. For local development, set `DATABASE_URL` to your PostgreSQL database and replace `SESSION_SECRET` with a long random value (at least 32 characters). Do not share `.env` or put real passwords or service keys in screenshots or public code.
 
-The authenticated API covers registration and sessions, wallet and policy reads/updates, send/swap/deposit/withdraw actions, cards, provider quotes and payouts, receipts, Control Center logs, and mini-app orders. Financial actions require a session and PIN, apply server-side policy checks, write audit records, and use idempotency keys.
+Prepare the database, then start the website:
 
-## Provider integration status
+```powershell
+npx prisma migrate dev --name init
+npm run db:seed
+npm run dev
+```
 
-Mock mode is the safe default. Flutterwave has a server-side transfer adapter; Wise has a quote adapter but its payout path is intentionally unavailable pending a recipient and confirmation workflow; BlindPay has a quote adapter while payouts are unavailable pending its contract/onboarding flow. Lightspark requires an SDK-backed implementation and is unavailable. Stellar can build a payment transaction, but signing requires an injected KMS signer and live payments must be explicitly enabled. Provider APIs and credentials have not been exercised against live accounts in this prototype. A live transfer should not be enabled until the complete agent pipeline, durable recovery/reconciliation, operational monitoring, and provider-specific compliance requirements are in place.
+Open [http://localhost:3000](http://localhost:3000) in your browser. To stop the local website, return to the PowerShell window and press **Ctrl+C**.
 
-The six-agent chain is represented in the demo payment workflow with ephemeral receipt signatures. Those signatures do not prove a real agent identity, and the workflow is not a deployed autonomous agent service. The chat uses deterministic intent parsing, not an LLM. Notifications, OTP delivery, WebAuthn/passkeys, KYC/AML and sanctions screening, real credential issuance, real DPoP, and live Stellar KMS signing are not implemented.
+If you only want to look at the interface, you can start with `npm run dev`; pages that need the database may not work until PostgreSQL is set up.
 
-## Simulated and production status
+## Useful commands
 
-**Simulated:** onboarding and OTP in development, demo wallet balances and rates, yield and card actions, local demo payments, agent execution and signatures, protocol status, inbound request feed, and mini-app fulfillment. No real KYC decision or money movement occurs in mock mode.
+Run these from the project folder in PowerShell:
 
-**Implemented foundations:** persistent data models, password hashing, signed server sessions, PIN-gated financial API paths, origin checks, input schemas, rate limiting, audit events, idempotency records, policy enforcement, and provider adapter interfaces. These foundations still need production operations review and deployment-specific hardening.
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | Starts the website for local use |
+| `npm run lint` | Looks for common code problems |
+| `npm test` | Runs the automated checks |
+| `npm run build` | Prepares an optimized website build |
+| `npx prisma migrate dev --name init` | Creates or updates the local database tables |
+| `npm run db:seed` | Adds the sample agent entries used by the demo |
 
-## Protocol references
+## Demo settings and real payment connections
 
-- [Stellar JavaScript SDK](https://stellar.github.io/js-stellar-sdk/)
-- [Flutterwave transfers API](https://developer.flutterwave.com/reference/create-a-transfer)
-- [Wise API reference](https://docs.wise.com/api-reference)
+The starter settings in `.env.example` select **mock mode**. In mock mode, sample payments and balances are simulations. Provider credentials (for example, Flutterwave, BlindPay, Wise, or Stellar settings) are optional for viewing the demo and are not needed to start the interface.
 
+Do not turn on live payments just to make the demo work. Real payments require properly configured provider accounts, secure secret storage, approved operational and compliance processes, and additional engineering. The app does not include a real card issuer, real identity checks, or real-world account protection services. Never put passwords, provider secrets, or private blockchain keys in browser-side code or in a setting whose name starts with `NEXT_PUBLIC_`.
+
+## Main folders at a glance
+
+```text
+app/          Website screens, shared styles, and server routes
+components/   Larger screen sections used by the website
+lib/          Shared behind-the-scenes helpers and provider connections
+prisma/       Database structure and sample database setup
+public/       Images and other files the browser can display
+tests/        Automated checks for selected app behavior
+```
